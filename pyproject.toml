@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "communications-toolbox"
+version = "1.0.0"
+description = ""
+authors = ["Brandon Liston <liston0456@aol.com>"]
+readme = "README.md"
+packages = [{include = "communications_toolbox"}]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.11"
+numpy = "^1.23.4"
+matplotlib = "^3.6.2"
+
+[tool.poetry.group.dev.dependencies]
+jupyter = "^1.0.0"
+flake8 = "^5.0.4"
+mypy = "^0.990"
+pydocstyle = "^6.1.1"
+pylama = "^8.4.1"
+pylint = "^2.15.5"
+black = {version = "^22.10.0", allow-prereleases = true}
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,6 +1,6 @@
 """These functions house tools for data generation.
 
-The functions implemented within this script encapsulate tools for data 
+The functions implemented within this script encapsulate tools for data
 generation and management for basic communication proof of concept development.
 """
 

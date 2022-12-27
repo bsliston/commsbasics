@@ -1,8 +1,13 @@
 import numpy as np
 
 
-def phase_delay_signal(signal: np.ndarray, phase_delay: float) -> np.ndarray:
-    delay = np.exp(1j * phase_delay)
+def phase_delay_signal(
+    signal: np.ndarray, phase_delay: float, shift_real_only: bool = False
+) -> np.ndarray:
+    if shift_real_only:
+        delay = np.cos(phase_delay) + 1j * 0.0
+    else:
+        delay = np.cos(phase_delay) + 1j * np.sin(phase_delay)
     return signal * delay
 
 

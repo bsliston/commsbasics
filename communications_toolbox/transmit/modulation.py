@@ -1,7 +1,6 @@
 import numpy as np
 import abc
-from itertools import product
-from typing import Tuple, Mapping
+from typing import Tuple, Mapping, Sequence
 
 DataSequence = Tuple[int, ...]
 InphaseQuadratureCoordinates = Tuple[float, float]
@@ -16,28 +15,29 @@ class Modulation:
         return NotImplemented
 
     @abc.abstractmethod
-    def modulate_data(self, data: np.ndarray, samples_per_symbol: int):
+    def modulate_data(
+        self, data: np.ndarray, samples_per_symbol: int
+    ) -> np.ndarray:
         return NotImplemented
 
     @abc.abstractmethod
-    def modulate(self, data: DataSequence) -> complex:
-        return NotImplemented
-
-    @abc.abstractmethod
-    def demodulate(self, signal: complex) -> DataSequence:
+    def demodulate_signal(self, signal: np.ndarray) -> np.ndarray:
         return NotImplemented
 
 
 class BPSK(Modulation):
     def __init__(self):
         self._bit_to_symbol: BitToSymbolMapping = {}
-        self._bit_to_symbol[(0,)] = (-1.0, 0.0)
-        self._bit_to_symbol[(1,)] = (1.0, 0.0)
+        self._symbols: InphaseQuadratureCoordinates = ((-1.0, 0.0), (1.0, 0.0))
+        self._bit_to_symbol[(0,)] = self._symbols[0]
+        self._bit_to_symbol[(1,)] = self._symbols[1]
         self._symbol_to_bit: SymbolToBitMapping = _reverse_mapping(
             self._bit_to_symbol
         )
 
-        self._bits_per_symbol: int = 1
+        self._bits_per_symbol: int = max(
+            [len(bit) for bit in self._bit_to_symbol]
+        )
 
     @property
     def bits_per_symbol(self) -> int:
@@ -52,25 +52,45 @@ class BPSK(Modulation):
         modulated_signal = np.zeros(
             (num_symbols * samples_per_symbol), dtype=np.complex64
         )
-        for seq_i in range(num_symbols):
-            data_seq_start = seq_i * self.bits_per_symbol
-            data_seq_stop = (seq_i + 1) * self.bits_per_symbol
+        for seq_idx in range(num_symbols):
+            data_seq_start = seq_idx * self.bits_per_symbol
+            data_seq_stop = (seq_idx + 1) * self.bits_per_symbol
             data_seq = data[data_seq_start:data_seq_stop]
 
-            mouldated_signal_index = seq_i * samples_per_symbol
-            modulated_signal[mouldated_signal_index] = self.modulate(
+            mouldated_signal_index = seq_idx * samples_per_symbol
+            modulated_signal[mouldated_signal_index] = self._modulate(
                 tuple(data_seq)
             )
 
         return modulated_signal
 
-    def modulate(self, data: DataSequence) -> complex:
+    def demodulate_signal(self, signal: np.ndarray) -> np.ndarray:
+        demodulated_data = np.zeros(len(signal))
+        for signal_idx, signal_symbol in enumerate(signal):
+            data_start_idx = signal_idx * self._bits_per_symbol
+            data_stop_idx = (signal_idx + 1) * self._bits_per_symbol
+            demodulated_data[data_start_idx:data_stop_idx] = self._demodulate(
+                signal_symbol
+            )
+
+        return demodulated_data
+
+    def _modulate(self, data: DataSequence) -> complex:
         symbol = self._bit_to_symbol[data]
         return _inphase_quadrature_to_complex(symbol)
 
-    def demodulate(self, signal: complex) -> DataSequence:
-        symbol = _complex_to_inphase_quadrature(signal)
-        return self._symbol_to_bit[symbol]
+    def _demodulate(self, signal: complex) -> int:
+        nearest_symbol = self._signal_nearest_symbol_mapping(signal)
+        return self._symbol_to_bit[nearest_symbol]
+
+    def _signal_nearest_symbol_mapping(self, signal: complex) -> complex:
+        signal_symbol_distances = np.zeros(len(self._symbols))
+        for symbol_idx, symbol in enumerate(self._symbols):
+            complex_symbol = _inphase_quadrature_to_complex(symbol)
+            signal_symbol_distances[symbol_idx] = abs(signal - complex_symbol)
+
+        closest_symbol_idx = np.argmin(signal_symbol_distances)
+        return self._symbols[closest_symbol_idx]
 
 
 def _inphase_quadrature_to_complex(

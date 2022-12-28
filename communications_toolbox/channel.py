@@ -1,14 +1,17 @@
 import numpy as np
 
 
-def phase_delay_signal(
-    signal: np.ndarray, phase_delay: float, shift_real_only: bool = False
-) -> np.ndarray:
-    if shift_real_only:
-        delay = np.cos(phase_delay) + 1j * 0.0
-    else:
-        delay = np.cos(phase_delay) + 1j * np.sin(phase_delay)
-    return signal * delay
+def phase_delay_signal(signal: np.ndarray, phase_delay: float) -> np.ndarray:
+    N = 21  # number of taps
+    n = np.arange(-N // 2, N // 2)  # ...-3,-2,-1,0,1,2,3...
+    h = np.sinc(n - phase_delay)  # calc filter taps
+    h *= np.hamming(
+        N
+    )  # window the filter to make sure it decays to 0 on both sides
+    h /= np.sum(
+        h
+    )  # normalize to get unity gain, we don't want to change the amplitude/power
+    return np.convolve(signal, h)  # apply filter
 
 
 def frequency_shift_signal(

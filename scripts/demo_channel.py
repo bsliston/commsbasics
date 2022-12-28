@@ -67,12 +67,10 @@ class ChannelEffects:
         sample_rate_hz: float,
         phase_delay: float,
         frequency_shift_hz: float,
-        shift_real_only: bool = True,
     ) -> None:
         self._sample_rate_hz = sample_rate_hz
         self._phase_delay = phase_delay
         self._frequency_shift_hz = frequency_shift_hz
-        self._shift_real_only = shift_real_only
 
     def transform(self, signal: np.ndarray) -> np.ndarray:
         noise = unity_noise(len(signal))
@@ -80,7 +78,6 @@ class ChannelEffects:
         signal_plus_noise_delayed = phase_delay_signal(
             signal_plus_noise,
             self._phase_delay,
-            shift_real_only=self._shift_real_only,
         )
         return frequency_shift_signal(
             signal_plus_noise_delayed,
@@ -140,9 +137,9 @@ class CommunicationPlayback:
         signal = self._data_modulator.generate_signal_data()
         effect_signal = self._channel_effects.transform(signal)
 
-        _, signal_corrected = align_signals(signal, effect_signal)
+        _, effect_signal_aligned = align_signals(signal, effect_signal)
         signal_corrected, self._time_synch_mu = mueller_time_synch(
-            signal_corrected,
+            effect_signal_aligned,
             self._samples_per_symbol,
         )
 
@@ -180,19 +177,18 @@ def bit_error(
     data_bit_difference = np.abs(data_corrected - demodulated_data_corrected)
     num_bit_errors = int(data_bit_difference.sum())
 
-    pdb.set_trace()
     return num_bit_errors, len(data_bit_difference)
 
 
 def main():
     sample_rate_hz: float = 100e3
     samples_per_symbol: int = 16
-    num_bits: int = 1024
+    num_bits: int = 128
     num_taps: int = 100
     beta: float = 0.3
 
     signal_noise_ratio_decibel: float = 15.0
-    phase_delay = np.pi * 0.6  # np.random.random()
+    phase_delay = 2.0
     frequency_shift_hz = 0 * (np.random.random() * 2 - 0.5)
 
     # Setup data generation and demodulation processing.
@@ -209,7 +205,7 @@ def main():
 
     # Setup channel effects processsing.
     channel_effects = ChannelEffects(
-        sample_rate_hz, phase_delay, frequency_shift_hz, shift_real_only=True
+        sample_rate_hz, phase_delay, frequency_shift_hz
     )
     playback = CommunicationPlayback(
         data_modulator, channel_effects, samples_per_symbol, 0.0

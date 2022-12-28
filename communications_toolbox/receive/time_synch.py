@@ -66,7 +66,6 @@ def align_signals(
         signal2_start = 0
         signal2_stop = min(signal2.size, signal1_stop - signal1_start)
 
-    print(lag)
     return (
         signal1[signal1_start:signal1_stop],
         signal2[signal2_start:signal2_stop],

@@ -22,7 +22,7 @@ class ScatterPlotter:
         ylabel: str,
         xlimit: Tuple[float, float],
         ylimit: Tuple[float, float],
-        figure_size: Tuple[float, float] = (5.0, 5.0),
+        figure_size: Tuple[float, float] = (4.0, 4.0),
     ) -> None:
         """Initializes scatter plotter.
 
@@ -32,7 +32,7 @@ class ScatterPlotter:
             ylabel: Y-axis label of scatter plot.
             xlimit: X-axis limit of scatter plot.
             ylimit: Y-axis limit of scatter plot.
-            figure_size: Size of figure. Defaults to (10.0, 10.0).
+            figure_size: Size of figure. Defaults to (4.0, 4.0).
         """
         self._title = title
         self._xlabel = xlabel

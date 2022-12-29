@@ -1,6 +1,6 @@
 import numpy as np
 import abc
-from typing import Tuple, Mapping, Sequence
+from typing import Tuple, Mapping
 
 DataSequence = Tuple[int, ...]
 InphaseQuadratureCoordinates = Tuple[float, float]
@@ -15,9 +15,7 @@ class Modulation:
         return NotImplemented
 
     @abc.abstractmethod
-    def modulate_data(
-        self, data: np.ndarray, samples_per_symbol: int
-    ) -> np.ndarray:
+    def modulate_data(self, data: np.ndarray) -> np.ndarray:
         return NotImplemented
 
     @abc.abstractmethod
@@ -26,7 +24,9 @@ class Modulation:
 
 
 class BPSK(Modulation):
-    def __init__(self):
+    def __init__(self, samples_per_symbol: int):
+        self._samples_per_symbol = samples_per_symbol
+
         self._bit_to_symbol: BitToSymbolMapping = {}
         self._symbols: InphaseQuadratureCoordinates = ((-1.0, 0.0), (1.0, 0.0))
         self._bit_to_symbol[(0,)] = self._symbols[0]
@@ -46,18 +46,17 @@ class BPSK(Modulation):
     def modulate_data(
         self,
         data: np.ndarray,
-        samples_per_symbol: int,
     ) -> np.ndarray:
         num_symbols = len(data) // self._bits_per_symbol
         modulated_signal = np.zeros(
-            (num_symbols * samples_per_symbol), dtype=np.complex64
+            (num_symbols * self._samples_per_symbol), dtype=np.complex64
         )
         for seq_idx in range(num_symbols):
             data_seq_start = seq_idx * self.bits_per_symbol
             data_seq_stop = (seq_idx + 1) * self.bits_per_symbol
             data_seq = data[data_seq_start:data_seq_stop]
 
-            mouldated_signal_index = seq_idx * samples_per_symbol
+            mouldated_signal_index = seq_idx * self._samples_per_symbol
             modulated_signal[mouldated_signal_index] = self._modulate(
                 tuple(data_seq)
             )
@@ -97,12 +96,6 @@ def _inphase_quadrature_to_complex(
     coords: InphaseQuadratureCoordinates,
 ) -> complex:
     return coords[0] + 1j * coords[1]
-
-
-def _complex_to_inphase_quadrature(
-    signal: complex,
-) -> InphaseQuadratureCoordinates:
-    return (signal.real, signal.imag)
 
 
 def _reverse_mapping(map: dict):

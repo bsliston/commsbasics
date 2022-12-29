@@ -1,17 +1,23 @@
 import numpy as np
 
 
-def phase_delay_signal(signal: np.ndarray, phase_delay: float) -> np.ndarray:
-    N = 21  # number of taps
-    n = np.arange(-N // 2, N // 2)  # ...-3,-2,-1,0,1,2,3...
-    h = np.sinc(n - phase_delay)  # calc filter taps
-    h *= np.hamming(
-        N
-    )  # window the filter to make sure it decays to 0 on both sides
-    h /= np.sum(
-        h
-    )  # normalize to get unity gain, we don't want to change the amplitude/power
-    return np.convolve(signal, h)  # apply filter
+def phase_delay_signal(
+    signal: np.ndarray, phase_delay: float, num_filter_samples: int = 101
+) -> np.ndarray:
+    # To phase delay the signal, a Sinc function and Hamming window are used
+    # with configured phase delay offset to offset samples of the signal. The
+    # hamming window convolved over the Sinc filter is to force the edges of
+    # the filter to zero.
+    filter_samples = np.arange(
+        -num_filter_samples // 2, num_filter_samples // 2
+    )
+    filter = np.sinc(filter_samples - phase_delay)
+    filter_with_hamming = filter * np.hamming(num_filter_samples)
+
+    # The filter is normalized to not change the amplitude of the convolved
+    # signal.
+    filter_with_hamming /= np.sum(filter_with_hamming)
+    return np.convolve(signal, filter)
 
 
 def frequency_shift_signal(

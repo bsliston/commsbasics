@@ -15,6 +15,7 @@ from communications_toolbox.channel import (
 )
 from communications_toolbox.receive.frequency_synch import (
     coarse_frequency_correction,
+    fine_frequency_correction,
 )
 from communications_toolbox.receive.time_synch import (
     mueller_time_synch,
@@ -202,8 +203,11 @@ class CommunicationPlayback:
         frequency_corrected_signal = coarse_frequency_correction(
             noise_delayed_shifted_signal, 2, 1e6
         )
-        _, effect_signal_aligned = align_signals(
+        signal, effect_signal_aligned = align_signals(
             signal, frequency_corrected_signal
+        )
+        effect_signal_aligned = fine_frequency_correction(
+            signal, effect_signal_aligned
         )
         signal_corrected, self._time_synch_mu = mueller_time_synch(
             effect_signal_aligned,
@@ -307,15 +311,15 @@ def bit_error(
 
 
 def main() -> None:
-    sample_rate_hz: float = 1e6
+    sample_rate_hz: float = 1.0e6
     samples_per_symbol: int = 16
     num_bits: int = 512
     num_taps: int = 100
     beta: float = 0.3
 
     signal_noise_ratio_decibel: float = 20.0
-    phase_delay = 3.1
-    frequency_shift_hz = 0.0  # * (np.random.random() * 2 - 0.5)
+    phase_delay = 1.5  # * np.random.random()
+    frequency_shift_hz = 10e3  # * (np.random.random() * 2 - 0.5)
 
     # Setup data generation and demodulation processing.
     modulation = BPSK(samples_per_symbol)

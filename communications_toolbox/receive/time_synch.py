@@ -1,7 +1,6 @@
 from typing import Tuple
 import numpy as np
-from scipy.signal import resample_poly
-from scipy.signal import correlation_lags
+from scipy.signal import resample_poly, correlation_lags
 
 
 def mueller_time_synch(

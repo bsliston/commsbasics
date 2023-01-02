@@ -52,7 +52,7 @@ class ScatterPlotter:
         """
         self._axes.cla()
         self._set_axes()
-        self._axes.scatter(data[:, 0], data[:, 1])
+        self._axes.scatter(data[:, 0], data[:, 1], s=2)
         plt.figure(self._fig.number)
         plt.pause(0.05)
 

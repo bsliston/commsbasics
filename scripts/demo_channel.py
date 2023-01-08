@@ -27,6 +27,8 @@ from communications_toolbox.plot import ScatterPlotter, HeatmapPlotter
 
 SignalTransform = Callable[[np.ndarray], np.ndarray]
 
+import pdb
+
 
 class DataModulator:
     """Data modulator for generating and demodulating signals."""
@@ -179,6 +181,9 @@ class CommunicationPlayback:
             self._corrected_scatter,
         ) = self._init_scatter_plotters()
 
+        self._phase = 0.0
+        self._freq = 0.0
+
     def step(self) -> float:
         """Steps in communication playback generation.
 
@@ -203,15 +208,12 @@ class CommunicationPlayback:
         frequency_corrected_signal = coarse_frequency_correction(
             noise_delayed_shifted_signal, 2, 1e6
         )
-        signal, effect_signal_aligned = align_signals(
-            signal, frequency_corrected_signal
-        )
-        effect_signal_aligned = fine_frequency_correction(
-            signal, effect_signal_aligned
-        )
-        signal_corrected, self._time_synch_mu = mueller_time_synch(
-            effect_signal_aligned,
+        effect_signal_aligned, self._time_synch_mu = mueller_time_synch(
+            frequency_corrected_signal,
             self._samples_per_symbol,
+        )
+        signal_corrected, self._phase, self._freq = fine_frequency_correction(
+            effect_signal_aligned, 1e6
         )
 
         # Update plots for generated, effected, and recovered signals.
@@ -312,14 +314,14 @@ def bit_error(
 
 def main() -> None:
     sample_rate_hz: float = 1.0e6
-    samples_per_symbol: int = 16
-    num_bits: int = 512
-    num_taps: int = 100
-    beta: float = 0.3
+    samples_per_symbol: int = 8
+    num_bits: int = 2500
+    num_taps: int = 101
+    beta: float = 0.35
 
     signal_noise_ratio_decibel: float = 20.0
-    phase_delay = 1.5  # * np.random.random()
-    frequency_shift_hz = 10e3  # * (np.random.random() * 2 - 0.5)
+    phase_delay = 0.4  # * np.random.random()
+    frequency_shift_hz = 1e3  # * (np.random.random() * 2 - 0.5)
 
     # Setup data generation and demodulation processing.
     modulation = BPSK(samples_per_symbol)

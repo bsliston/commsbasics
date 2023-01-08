@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.signal import correlation_lags
 
 
 def coarse_frequency_correction(
@@ -38,34 +37,39 @@ def coarse_frequency_correction(
 
 
 def fine_frequency_correction(
-    reference_signal: np.ndarray, received_signal: np.ndarray
+    received_signal: np.ndarray,
+    sample_rate_hz: float = 1e6,
+    phase: float = 0.0,
+    freq: float = 0.0,
 ) -> np.ndarray:
-    reference_frequency_magnitude_hz = np.abs(np.fft.fft(reference_signal))
-    received_frequency_magnitude_hz = np.abs(np.fft.fft(received_signal))
+    num_samples = len(received_signal)
 
-    correlation = np.correlate(
-        received_frequency_magnitude_hz,
-        reference_frequency_magnitude_hz,
-        mode="full",
-    )
-    lags = correlation_lags(
-        received_frequency_magnitude_hz.size,
-        reference_frequency_magnitude_hz.size,
-        mode="full",
-    )
+    # These next two params is what to adjust, to make the feedback loop faster or slower (which impacts stability)
+    alpha = 0.005
+    beta = 0.001
+    out = np.zeros(num_samples, dtype=np.complex)
+    freq_log = []
+    ii = 0
+    for i in range(num_samples):
+        out[i] = received_signal[i] * np.exp(
+            -1j * phase
+        )  # adjust the input sample by the inverse of the estimated phase offset
+        error = np.real(out[i]) * np.imag(
+            out[i]
+        )  # This is the error formula for 2nd order Costas Loop (e.g. for BPSK)
 
-    vpos = np.abs(correlation[lags == 1])
-    vneg = np.abs(correlation[lags == -1])
-    v0 = np.abs(correlation[lags == 0])
-    a = 0.5 * (vpos + vneg) - v0
-    b = 0.5 * (vpos - vneg)
-    idx = -b / (2 * a)
+        # Advance the loop (recalc phase and freq offset)
+        freq += beta * error
+        freq_log.append(
+            freq * sample_rate_hz / (2 * np.pi) / 8
+        )  # convert from angular velocity to Hz for logging
+        phase += freq + (alpha * error)
 
-    return received_signal * np.exp(
-        -1j
-        * 2
-        * np.pi
-        * (idx)
-        / received_signal.size
-        * np.arange(received_signal.size)
-    )
+        # Optional: Adjust phase so its always between 0 and 2pi, recall that phase wraps around every 2pi
+        while phase >= 2 * np.pi:
+            phase -= 2 * np.pi
+        while phase < 0:
+            phase += 2 * np.pi
+        ii += 1
+
+    return out, phase, freq

@@ -1,6 +1,7 @@
 import numpy as np
-import abc
 from typing import Tuple, Mapping
+
+from communications_toolbox.modulation.modulation import Modulation
 
 DataSequence = Tuple[int, ...]
 InphaseQuadratureCoordinates = Tuple[float, float]
@@ -8,29 +9,16 @@ BitToSymbolMapping = Mapping[DataSequence, InphaseQuadratureCoordinates]
 SymbolToBitMapping = Mapping[InphaseQuadratureCoordinates, DataSequence]
 
 
-class Modulation:
-    @property
-    @abc.abstractmethod
-    def bits_per_symbol(self) -> int:
-        return NotImplemented
-
-    @abc.abstractmethod
-    def modulate_data(self, data: np.ndarray) -> np.ndarray:
-        return NotImplemented
-
-    @abc.abstractmethod
-    def demodulate_signal(self, signal: np.ndarray) -> np.ndarray:
-        return NotImplemented
-
-
-class BPSK(Modulation):
-    def __init__(self, samples_per_symbol: int):
+class QAM(Modulation):
+    def __init__(
+        self,
+        samples_per_symbol: int,
+        symbols: InphaseQuadratureCoordinates,
+        bit_to_symbol: BitToSymbolMapping,
+    ):
         self._samples_per_symbol = samples_per_symbol
-
-        self._bit_to_symbol: BitToSymbolMapping = {}
-        self._symbols: InphaseQuadratureCoordinates = ((-1.0, 0.0), (1.0, 0.0))
-        self._bit_to_symbol[(0,)] = self._symbols[0]
-        self._bit_to_symbol[(1,)] = self._symbols[1]
+        self._symbols = symbols
+        self._bit_to_symbol = bit_to_symbol
         self._symbol_to_bit: SymbolToBitMapping = _reverse_mapping(
             self._bit_to_symbol
         )
@@ -38,10 +26,15 @@ class BPSK(Modulation):
         self._bits_per_symbol: int = max(
             [len(bit) for bit in self._bit_to_symbol]
         )
+        self._num_symbols = len(self._bit_to_symbol)
 
     @property
     def bits_per_symbol(self) -> int:
         return self._bits_per_symbol
+
+    @property
+    def num_symbols(self) -> int:
+        return self._num_symbols
 
     def modulate_data(
         self,
@@ -52,8 +45,8 @@ class BPSK(Modulation):
             (num_symbols * self._samples_per_symbol), dtype=np.complex64
         )
         for seq_idx in range(num_symbols):
-            data_seq_start = seq_idx * self.bits_per_symbol
-            data_seq_stop = (seq_idx + 1) * self.bits_per_symbol
+            data_seq_start = seq_idx * self._bits_per_symbol
+            data_seq_stop = (seq_idx + 1) * self._bits_per_symbol
             data_seq = data[data_seq_start:data_seq_stop]
 
             mouldated_signal_index = seq_idx * self._samples_per_symbol
@@ -64,7 +57,7 @@ class BPSK(Modulation):
         return modulated_signal
 
     def demodulate_signal(self, signal: np.ndarray) -> np.ndarray:
-        demodulated_data = np.zeros(len(signal))
+        demodulated_data = np.zeros(len(signal) * self._bits_per_symbol)
         for signal_idx, signal_symbol in enumerate(signal):
             data_start_idx = signal_idx * self._bits_per_symbol
             data_stop_idx = (signal_idx + 1) * self._bits_per_symbol
@@ -92,11 +85,36 @@ class BPSK(Modulation):
         return self._symbols[closest_symbol_idx]
 
 
+class BPSK(QAM):
+    def __init__(self, samples_per_symbol: int):
+        symbols: InphaseQuadratureCoordinates = ((-1.0, 0.0), (1.0, 0.0))
+        bit_to_symbol: BitToSymbolMapping = {}
+        bit_to_symbol[(0,)] = symbols[0]
+        bit_to_symbol[(1,)] = symbols[1]
+        super(BPSK, self).__init__(samples_per_symbol, symbols, bit_to_symbol)
+
+
+class QPSK(QAM):
+    def __init__(self, samples_per_symbol: int):
+        symbols: InphaseQuadratureCoordinates = (
+            (-1.0, -1.0),
+            (1.0, -1.0),
+            (1.0, 1.0),
+            (-1.0, 1.0),
+        )
+        bit_to_symbol: BitToSymbolMapping = {}
+        bit_to_symbol[(0, 0)] = symbols[0]
+        bit_to_symbol[(0, 1)] = symbols[1]
+        bit_to_symbol[(1, 0)] = symbols[2]
+        bit_to_symbol[(1, 1)] = symbols[3]
+        super(QPSK, self).__init__(samples_per_symbol, symbols, bit_to_symbol)
+
+
 def _inphase_quadrature_to_complex(
     coords: InphaseQuadratureCoordinates,
 ) -> complex:
     return coords[0] + 1j * coords[1]
 
 
-def _reverse_mapping(map: dict):
-    return {v: k for k, v in map.items()}
+def _reverse_mapping(data: Mapping) -> Mapping:
+    return {v: k for k, v in data.items()}

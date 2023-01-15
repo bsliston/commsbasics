@@ -4,9 +4,11 @@ This script is purposed for demonstration of existing modules and tools that
 exist within this project.
 """
 from typing import Tuple, Callable
+from collections import deque
 import numpy as np
 from communications_toolbox.transmit.data import random_data
-from communications_toolbox.transmit.modulation import Modulation, BPSK
+from communications_toolbox.modulation.modulation import Modulation
+from communications_toolbox.modulation.qam import BPSK, QPSK
 from communications_toolbox.transmit.pulse_shaping import raised_cosine_filter
 from communications_toolbox.channel import (
     unity_noise,
@@ -21,7 +23,10 @@ from communications_toolbox.receive.time_synch import (
     mueller_time_synch,
     align_signals,
 )
-from communications_toolbox.transformation import normalize_signal
+from communications_toolbox.transformation import (
+    normalize_signal,
+    short_time_fourier_transform,
+)
 from communications_toolbox.plot import ScatterPlotter, HeatmapPlotter
 
 
@@ -54,6 +59,15 @@ class DataModulator:
         self._signal_power_decibel = signal_power_decibel
         self._signal_filter = signal_filter
         self._data = data
+
+    @property
+    def num_symbols(self) -> int:
+        """Returns the number of modulation symbols.
+
+        Returns:
+            Number of modulation symbols.
+        """
+        return self._modulation.num_symbols
 
     def generate_signal_data(self) -> np.ndarray:
         """Modulates data into signal.
@@ -108,6 +122,15 @@ class ChannelEffects:
         self._phase_delay = phase_delay
         self._frequency_shift_hz = frequency_shift_hz
 
+    @property
+    def sample_rate_hz(self) -> float:
+        """Returns sample rate in hertz.
+
+        Returns:
+            Sample rate in hertz.
+        """
+        return self._sample_rate_hz
+
     def add_noise(self, signal) -> np.ndarray:
         """Adds unity noise to signal.
 
@@ -160,6 +183,7 @@ class CommunicationPlayback:
         channel_effects: ChannelEffects,
         samples_per_symbol: int,
         time_synch_mu: float = 0.0,
+        waterfall_length: int = 512,
     ) -> None:
         """Initializes communication playback.
 
@@ -168,21 +192,25 @@ class CommunicationPlayback:
             channel_effects:
             samples_per_symbol:
             time_synch_mu:
+            waterfall_length:
         """
         self._data_modulator = data_modulator
         self._channel_effects = channel_effects
         self._samples_per_symbol = samples_per_symbol
         self._time_synch_mu = time_synch_mu
+        self._waterfall_length = waterfall_length
 
         (
             self._noise_scatter,
             self._noise_delayed_scatter,
             self._noise_delayed_shifted_scatter,
             self._corrected_scatter,
+            self._waterfall_image,
         ) = self._init_scatter_plotters()
 
-        self._phase = 0.0
-        self._freq = 0.0
+        self._waterfall = deque(maxlen=waterfall_length)
+        for _ in range(waterfall_length):
+            self._waterfall.append(np.zeros((waterfall_length)))
 
     def step(self) -> float:
         """Steps in communication playback generation.
@@ -203,17 +231,27 @@ class CommunicationPlayback:
             self._channel_effects.frequency_shift_signal(noise_delayed_signal)
         )
 
+        # Append waterfall signal
+        waterfall_frequency_signal = short_time_fourier_transform(
+            noise_delayed_shifted_signal, self._waterfall_length
+        )
+        self._waterfall.extend(waterfall_frequency_signal)
+        self._waterfall_image.update(np.array(self._waterfall).T)
+
         # Correct signal for alignment, frequency offset, and time
         # synchronization
         frequency_corrected_signal = coarse_frequency_correction(
-            noise_delayed_shifted_signal, 2, 1e6
+            noise_delayed_shifted_signal,
+            self._data_modulator.num_symbols,
+            self._channel_effects.sample_rate_hz,
         )
         effect_signal_aligned, self._time_synch_mu = mueller_time_synch(
             frequency_corrected_signal,
             self._samples_per_symbol,
         )
         signal_corrected, self._phase, self._freq = fine_frequency_correction(
-            effect_signal_aligned, 1e6
+            effect_signal_aligned,
+            self._channel_effects.sample_rate_hz,
         )
 
         # Update plots for generated, effected, and recovered signals.
@@ -250,7 +288,13 @@ class CommunicationPlayback:
 
     def _init_scatter_plotters(
         self, axis_limit: tuple = (-2.0, 2.0)
-    ) -> Tuple[ScatterPlotter, ScatterPlotter, ScatterPlotter, ScatterPlotter]:
+    ) -> Tuple[
+        ScatterPlotter,
+        ScatterPlotter,
+        ScatterPlotter,
+        ScatterPlotter,
+        HeatmapPlotter,
+    ]:
         """Initializes signal scatter plots.
 
         Args:
@@ -292,11 +336,14 @@ class CommunicationPlayback:
             axis_limit,
         )
 
+        waterfall = HeatmapPlotter("Signal Waterfall", "Frequency", "Time")
+
         return (
             noise_scatter,
             noise_delayed_scatter,
             noise_delayed_shifted_scatter,
             corrected_scatter,
+            waterfall,
         )
 
 
@@ -315,16 +362,16 @@ def bit_error(
 def main() -> None:
     sample_rate_hz: float = 1.0e6
     samples_per_symbol: int = 8
-    num_bits: int = 2500
+    num_bits: int = 500
     num_taps: int = 101
     beta: float = 0.35
 
     signal_noise_ratio_decibel: float = 20.0
-    phase_delay = 0.4  # * np.random.random()
-    frequency_shift_hz = 1e3  # * (np.random.random() * 2 - 0.5)
+    phase_delay = 1.4  # * np.random.random()
+    frequency_shift_hz = 50e3  # * (np.random.random() * 2 - 0.5)
 
     # Setup data generation and demodulation processing.
-    modulation = BPSK(samples_per_symbol)
+    modulation = QPSK(samples_per_symbol)
     data = random_data(num_bits)
     signal_filter = raised_cosine_filter(num_taps, beta, samples_per_symbol)
     data_modulator = DataModulator(

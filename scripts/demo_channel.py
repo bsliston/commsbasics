@@ -17,7 +17,7 @@ from communications_toolbox.channel import (
 )
 from communications_toolbox.receive.frequency_synch import (
     coarse_frequency_correction,
-    fine_frequency_correction,
+    costas_loop_qpsk,
 )
 from communications_toolbox.receive.time_synch import (
     mueller_time_synch,
@@ -249,9 +249,8 @@ class CommunicationPlayback:
             frequency_corrected_signal,
             self._samples_per_symbol,
         )
-        signal_corrected, self._phase, self._freq = fine_frequency_correction(
+        signal_corrected = costas_loop_qpsk(
             effect_signal_aligned,
-            self._channel_effects.sample_rate_hz,
         )
 
         # Update plots for generated, effected, and recovered signals.
@@ -361,14 +360,14 @@ def bit_error(
 
 def main() -> None:
     sample_rate_hz: float = 1.0e6
-    samples_per_symbol: int = 8
-    num_bits: int = 500
+    samples_per_symbol: int = 24
+    num_bits: int = 5000
     num_taps: int = 101
-    beta: float = 0.35
+    beta: float = 0.15
 
-    signal_noise_ratio_decibel: float = 20.0
-    phase_delay = 1.4  # * np.random.random()
-    frequency_shift_hz = 50e3  # * (np.random.random() * 2 - 0.5)
+    signal_noise_ratio_decibel: float = 30.0
+    phase_delay = 0.25  # * np.random.random()
+    frequency_shift_hz = 100e3  # * (np.random.random() * 2 - 0.5)
 
     # Setup data generation and demodulation processing.
     modulation = QPSK(samples_per_symbol)

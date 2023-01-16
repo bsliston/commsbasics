@@ -1,5 +1,6 @@
-import numpy as np
 from typing import Tuple, Mapping
+import numpy as np
+from itertools import product
 
 from communications_toolbox.modulation.modulation import Modulation
 
@@ -108,6 +109,22 @@ class QPSK(QAM):
         bit_to_symbol[(1, 0)] = symbols[2]
         bit_to_symbol[(1, 1)] = symbols[3]
         super(QPSK, self).__init__(samples_per_symbol, symbols, bit_to_symbol)
+
+
+class QAM16(QAM):
+    def __init__(self, samples_per_symbol: int):
+        grid_values: Tuple[float, ...] = (-3.0, -1.0, 1.0, 3.0)
+        symbols: list = []
+        for in_phase in grid_values:
+            for quadrature_phase in grid_values:
+                symbols.append((in_phase, quadrature_phase))
+        symbols: InphaseQuadratureCoordinates = tuple(symbols)
+
+        bit_permutations: product = list(product([0, 1], repeat=4))
+        bit_to_symbol: BitToSymbolMapping = {
+            bit: symbol for bit, symbol in zip(bit_permutations, symbols)
+        }
+        super(QAM16, self).__init__(samples_per_symbol, symbols, bit_to_symbol)
 
 
 def _inphase_quadrature_to_complex(

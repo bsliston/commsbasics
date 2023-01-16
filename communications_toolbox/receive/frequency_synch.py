@@ -36,40 +36,56 @@ def coarse_frequency_correction(
     return signal * np.exp(1j * 2 * np.pi * -frequency_offset_hz * time)
 
 
-def fine_frequency_correction(
+def costas_loop(
     received_signal: np.ndarray,
-    sample_rate_hz: float = 1e6,
-    phase: float = 0.0,
-    freq: float = 0.0,
+    error_function,
+    alpha: float = 0.005,
+    beta: float = 0.001,
 ) -> np.ndarray:
+    phase: float = 0.0
+    freq: float = 0.0
+
     num_samples = len(received_signal)
-
-    # These next two params is what to adjust, to make the feedback loop faster or slower (which impacts stability)
-    alpha = 0.005
-    beta = 0.001
-    out = np.zeros(num_samples, dtype=np.complex)
-    freq_log = []
-    ii = 0
+    out = np.zeros(num_samples, dtype=complex)
     for i in range(num_samples):
-        out[i] = received_signal[i] * np.exp(
-            -1j * phase
-        )  # adjust the input sample by the inverse of the estimated phase offset
-        error = np.real(out[i]) * np.imag(
-            out[i]
-        )  # This is the error formula for 2nd order Costas Loop (e.g. for BPSK)
+        out[i] = received_signal[i] * np.exp(-1j * phase)
 
-        # Advance the loop (recalc phase and freq offset)
+        # error = np.real(out[i]) * np.imag(out[i])
+        error = error_function(out[i])
+
         freq += beta * error
-        freq_log.append(
-            freq * sample_rate_hz / (2 * np.pi) / 8
-        )  # convert from angular velocity to Hz for logging
         phase += freq + (alpha * error)
 
-        # Optional: Adjust phase so its always between 0 and 2pi, recall that phase wraps around every 2pi
-        while phase >= 2 * np.pi:
-            phase -= 2 * np.pi
-        while phase < 0:
-            phase += 2 * np.pi
-        ii += 1
+    return out
 
-    return out, phase, freq
+
+def costas_loop_bpsk(
+    received_signal: np.ndarray,
+    alpha: float = 0.005,
+    beta: float = 0.001,
+):
+    return costas_loop(received_signal, _costas_loop_bpsk_error, alpha, beta)
+
+
+def costas_loop_qpsk(
+    received_signal: np.ndarray,
+    alpha: float = 0.005,
+    beta: float = 0.001,
+):
+    return costas_loop(received_signal, _costas_loop_qpsk_error, alpha, beta)
+
+
+def _costas_loop_bpsk_error(sample: complex) -> float:
+    return np.real(sample) * np.imag(sample)
+
+
+def _costas_loop_qpsk_error(sample: complex) -> float:
+    if sample.real > 0:
+        a = 1.0
+    else:
+        a = -1.0
+    if sample.imag > 0:
+        b = 1.0
+    else:
+        b = -1.0
+    return a * sample.imag - b * sample.real
